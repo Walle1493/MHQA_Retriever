@@ -2,7 +2,7 @@ export DATA_DIR=/home/mxdong/Data/HotpotQA/format_data
 export TASK_NAME=Retriever1
 export MODEL_NAME=bert-base-uncased
 
-CUDA_VISIBLE_DEVICES=2 python run.py \
+CUDA_VISIBLE_DEVICES=2 python run_hotpotqa.py \
     --model_type bert \
     --model_name_or_path $MODEL_NAME \
     --task_name $TASK_NAME \

@@ -1,4 +1,4 @@
-export DATA_DIR=/home/mxdong/Data/HotpotQA/short_data
+export DATA_DIR=/home/mxdong/Data/HotpotQA/format_data
 export TASK_NAME=Retriever1
 export MODEL_NAME=bert-base-uncased
 
