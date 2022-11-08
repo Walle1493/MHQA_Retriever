@@ -248,6 +248,87 @@ class RetrieverProcessor2(DataProcessor):
         return labels
 
 
+class RetrieverProcessor3(DataProcessor):
+    """Retriever Processor 3 for the MuSiQue data set."""
+
+    def get_train_examples(self, data_dir):
+        """See base class."""
+        logger.info("LOOKING AT {} train".format(data_dir))
+        return self._create_examples(self._read_json(os.path.join(data_dir, "train.json")), "train")
+
+    def get_dev_examples(self, data_dir):
+        """See base class."""
+        logger.info("LOOKING AT {} dev".format(data_dir))
+        return self._create_examples(self._read_json(os.path.join(data_dir, "dev.json")), "dev")
+
+    def get_test_examples(self, data_dir):
+        logger.info("LOOKING AT {} test".format(data_dir))
+        # TODO: replace dev set with test set
+        return self._create_examples(self._read_json(os.path.join(data_dir, "dev.json")), "test")
+
+    def get_labels(self):
+        """See base class."""
+        return list(range(20))
+
+    def _read_json(self, input_file):
+        with open(input_file, "r") as f:
+            lines = json.load(f)
+        return lines
+
+    def _create_examples(self, lines, type):
+        """Creates examples for the training and dev sets."""
+        examples = []
+        for d in lines:
+            context = d['paragraphs']
+            question = d['question']
+            sup_facts = d['question_decomposition']
+            # context json -> 10 [head, paragraph] for hotpotqa
+            contexts = self._create_contexts(context)
+            # supporting_facts -> [a, b] index for sup
+            labels = self._sup2label(sup_facts)
+            labels = self._4labels(labels)
+            # answers = d['answer']
+            # label = 0 if type == "test" else d['label'] # for test set, there is no label. Just use 0 for convenience.
+            id_string = d['id']
+            examples.append(
+                InputExample(
+                    example_id = id_string,
+                    question = question,
+                    contexts = contexts,  # this is not efficient but convenient
+                    # endings=[answers[0], answers[1], answers[2], answers[3]],
+                    labels = labels
+                    )
+                )  
+        return examples
+    
+    def _create_contexts(self, context):
+        """convert context json to <title, context> pairs"""
+        contexts = []
+        for item in context:
+            title, text = item["title"], item["paragraph_text"]
+            contexts.append(title + " " + text)
+        # add NULL for those less than 10 documents
+        for _ in range(len(contexts), 20):
+            contexts.append("NULL")
+        return contexts
+
+    def _sup2label(self, sup_facts):
+        """convert supporting facts to 2 ids for hotpotqa"""
+        labels = set()
+        for sup in sup_facts:
+            index = sup["paragraph_support_idx"]
+            labels.add(index)
+        return list(labels)
+    
+    def _4labels(self, labels):
+        """ceonvert [2,3,4] labels to 4 labels"""
+        if len(labels) == 2:
+            labels.extend(labels)
+        elif len(labels) == 3:
+            labels.append(labels[0])
+        return labels
+
+
 class ReaderProcessor(DataProcessor):
     """Reader Processor for the HotpotQA data set."""
     pass
@@ -590,6 +671,6 @@ def convert_examples_to_features(
 
 
 # processors = {"race": RaceProcessor, "swag": SwagProcessor, "arc": ArcProcessor, "reclor": ReclorProcessor}
-processors = {"retriever1": RetrieverProcessor1, "retriever2": RetrieverProcessor2, "reader": ReaderProcessor}
+processors = {"retriever1": RetrieverProcessor1, "retriever2": RetrieverProcessor2, "retriever3": RetrieverProcessor3, "reader": ReaderProcessor}
 
 MULTIPLE_CHOICE_TASKS_NUM_LABELS = {"race": 4, "swag": 4, "arc": 4, "reclor": 4}
