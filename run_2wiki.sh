@@ -1,8 +1,8 @@
-export DATA_DIR=/home/mxdong/Data/HotpotQA/format_data
-export TASK_NAME=Retriever1
+export DATA_DIR=/home/mxdong/Data/2Wiki/format_data
+export TASK_NAME=Retriever2
 export MODEL_NAME=bert-base-uncased
 
-CUDA_VISIBLE_DEVICES=2 python run_hotpotqa.py \
+CUDA_VISIBLE_DEVICES=2 python run_2wiki.py \
     --model_type bert \
     --model_name_or_path $MODEL_NAME \
     --task_name $TASK_NAME \
@@ -18,11 +18,11 @@ CUDA_VISIBLE_DEVICES=2 python run_hotpotqa.py \
     --learning_rate 1e-5 \
     --num_train_epochs 4.0 \
     --output_dir Checkpoints/$TASK_NAME/${MODEL_NAME} \
-    --logging_steps 200 \
-    --save_steps 200 \
+    --logging_steps 2000 \
+    --save_steps 2000 \
     --adam_epsilon 1e-6 \
     --no_clip_grad_norm \
     --warmup_proportion 0.1 \
-    --k_sent 2 \
+    --k_sent 4 \
     --overwrite_output_dir \
     # --fp16 \

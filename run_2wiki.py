@@ -75,12 +75,13 @@ def select_field(features, field):
 #     return (preds == labels).mean()
 
 def cal_metrics(preds, labels):
-    EM, F1 = 0.0, 0.0
+    EM, F1, CV = 0.0, 0.0, 0.0
     for i in range(len(preds)):
-        em, f1, prec, recall = retriever_metrics(preds[i], labels[i])
+        em, f1, prec, recall, cover = retriever_metrics(preds[i], labels[i], _2wiki=True)
         EM += em
         F1 += f1
-    return EM / len(preds), F1 / len(preds)
+        CV += cover
+    return EM / len(preds), F1 / len(preds), CV / len(preds)
 
 
 def set_seed(args):
@@ -156,38 +157,42 @@ def train(args, train_dataset, model, tokenizer):
     logger.info("  Gradient Accumulation steps = %d", args.gradient_accumulation_steps)
     logger.info("  Total optimization steps = %d", t_total)
 
-    def evaluate_model(train_preds, train_label_ids, tb_writer, args, model, tokenizer, best_steps, best_dev_em, best_dev_f1):
+    def evaluate_model(train_preds, train_label_ids, tb_writer, args, model, tokenizer, best_steps, best_dev_em, best_dev_f1, best_dev_cv):
         # top k train preds
         k_arange = -np.arange(args.k_sent, 0, -1)
         train_preds = np.argpartition(train_preds, -args.k_sent)[:, k_arange]
         ## train_preds = np.argmax(train_preds, axis=1)
         ## train_acc = simple_accuracy(train_preds, train_label_ids)
-        train_em, train_f1 = cal_metrics(train_preds, train_label_ids)
+        train_em, train_f1, train_cv = cal_metrics(train_preds, train_label_ids)
         train_preds = None
         train_label_ids = None
         results = evaluate(args, model, tokenizer)
         logger.info(
-            "train em: %s, train f1: %s, dev em: %s, dev f1: %s, loss: %s, global steps: %s",
+            "train em: %s, train f1: %s, dev em: %s, dev f1: %s, dev cv: %s, loss: %s, global steps: %s",
             str(train_em),
             str(train_f1),
+            str(train_cv),
             # str(dev_em),
             # str(dev_f1),
             # str(results["eval_acc"]),
             str(results["eval_em"]),
             str(results["eval_f1"]),
+            str(results["eval_cv"]),
             str(results["eval_loss"]),
             str(global_step),
         )
-        tb_writer.add_scalar("training/em-f1", train_em, train_f1, global_step)
+        tb_writer.add_scalar("training/em-f1-cv", train_f1, train_cv, global_step)
         for key, value in results.items():
             tb_writer.add_scalar("eval_{}".format(key), value, global_step)
-        if results["eval_em"] > best_dev_em or results["eval_f1"] > best_dev_f1:
+        if results["eval_em"] > best_dev_em or results["eval_f1"] > best_dev_f1 or results["eval_cv"] > best_dev_cv:
             best_dev_em = results["eval_em"]
             best_dev_f1 = results["eval_f1"]
+            best_dev_cv = results["eval_cv"]
             best_steps = global_step
-            logger.info("achieve BEST dev em and f1: %s, %s at global step: %s",
+            logger.info("achieve BEST dev em, f1, and cv: %s, %s, %s at global step: %s",
                         str(best_dev_em),
                         str(best_dev_f1),
+                        str(best_dev_cv),
                         str(best_steps)
             )
             # if args.do_test:
@@ -215,11 +220,11 @@ def train(args, train_dataset, model, tokenizer):
             logger.info("Saving model checkpoint to %s", output_dir)
             txt_dir = os.path.join(output_dir, 'best_dev_results.txt')
             with open(txt_dir, 'w') as f:
-                rs = 'global_steps: {}; dev_em: {}; dev_f1: {}'.format(global_step, best_dev_em, best_dev_f1)
+                rs = 'global_steps: {}; dev_em: {}; dev_f1: {}; dev_cv: {}'.format(global_step, best_dev_em, best_dev_f1, best_dev_cv)
                 f.write(rs)  
                 tb_writer.add_text('best_results', rs, global_step)
 
-        return train_preds, train_label_ids, train_em, train_f1, best_steps, best_dev_em, best_dev_f1
+        return train_preds, train_label_ids, train_em, train_f1, train_cv, best_steps, best_dev_em, best_dev_f1, best_dev_cv
     def save_model(args, model, tokenizer):
         output_dir = os.path.join(args.output_dir, "checkpoint-{}".format(global_step))
         if not os.path.exists(output_dir):
@@ -237,6 +242,7 @@ def train(args, train_dataset, model, tokenizer):
     tr_loss, logging_loss = 0.0, 0.0
     best_dev_em = 0.0
     best_dev_f1 = 0.0
+    best_dev_cv = 0.0
     best_steps = 0
     train_preds = None
     train_label_ids = None
@@ -297,14 +303,15 @@ def train(args, train_dataset, model, tokenizer):
                     if (
                         args.local_rank == -1 and args.evaluate_during_training
                     ):  # Only evaluate when single GPU otherwise metrics may not average well
-                        train_preds, train_label_ids, train_em, train_f1, best_steps, best_dev_em, best_dev_f1 = evaluate_model(train_preds, train_label_ids, tb_writer, args, model, tokenizer, best_steps, best_dev_em, best_dev_f1)
+                        train_preds, train_label_ids, train_em, train_f1, train_cv, best_steps, best_dev_em, best_dev_f1, best_dev_cv = evaluate_model(train_preds, train_label_ids, tb_writer, args, model, tokenizer, best_steps, best_dev_em, best_dev_f1, best_dev_cv)
                     tb_writer.add_scalar("training/lr", scheduler.get_lr()[0], global_step)
                     tb_writer.add_scalar("training/loss", (tr_loss - logging_loss) / args.logging_steps, global_step)
                     logger.info(
-                        "Average loss: %s, average em: %s, average f1: %s at global step: %s",
+                        "Average loss: %s, average em: %s, average f1: %s, average cv: %s at global step: %s",
                         str((tr_loss - logging_loss) / args.logging_steps),
                         str(train_em),
                         str(train_f1),
+                        str(train_cv),
                         str(global_step),
                     )
                     logging_loss = tr_loss
@@ -319,7 +326,8 @@ def train(args, train_dataset, model, tokenizer):
             break
 
     if args.local_rank in [-1, 0]:
-        train_preds, train_label_ids, train_em, train_f1, best_steps, best_dev_em, best_dev_f1 = evaluate_model(train_preds, train_label_ids, tb_writer, args, model, tokenizer, best_steps, best_dev_em, best_dev_f1)
+        train_preds, train_label_ids, train_em, train_f1, train_cv, best_steps, best_dev_em, best_dev_f1, best_dev_cv = \
+        evaluate_model(train_preds, train_label_ids, tb_writer, args, model, tokenizer, best_steps, best_dev_em, best_dev_f1, best_dev_cv)
         save_model(args, model, tokenizer)
         tb_writer.close()
 
@@ -385,10 +393,10 @@ def evaluate(args, model, tokenizer, prefix="", test=False):
         eval_preds = np.argpartition(preds, -args.k_sent)[:, k_arange]
         ## preds = np.argmax(preds, axis=1)
         ## acc = simple_accuracy(preds, out_label_ids)
-        eval_em, eval_f1 = cal_metrics(eval_preds, out_label_ids)
+        eval_em, eval_f1, eval_cv = cal_metrics(eval_preds, out_label_ids)
 
         ## result = {"eval_acc": acc, "eval_loss": eval_loss}
-        result = {"eval_em": eval_em, "eval_f1": eval_f1, "eval_loss": eval_loss}
+        result = {"eval_em": eval_em, "eval_f1": eval_f1, "eval_cv": eval_cv,  "eval_loss": eval_loss}
         results.update(result)
 
         output_eval_file = os.path.join(eval_output_dir, "is_test_" + str(test).lower() + "_eval_results.txt")
@@ -471,7 +479,7 @@ def load_and_cache_examples(args, task, tokenizer, evaluate=False, test=False):
     all_input_ids = torch.tensor(select_field(features, "input_ids"), dtype=torch.long)
     all_input_mask = torch.tensor(select_field(features, "input_mask"), dtype=torch.long)
     all_segment_ids = torch.tensor(select_field(features, "segment_ids"), dtype=torch.long)
-    all_label_ids = torch.tensor([f.labels for f in features], dtype=torch.long)    # (bsz, 2)
+    all_label_ids = torch.tensor([f.labels for f in features], dtype=torch.long)    # (bsz, 4)
 
     dataset = TensorDataset(all_input_ids, all_input_mask, all_segment_ids, all_label_ids)
     return dataset
@@ -797,8 +805,7 @@ def main():
         model.to(args.device)
         # result, preds = evaluate(args, model, tokenizer, prefix=prefix, test=True)
         result, preds = evaluate(args, model, tokenizer, test=True)
-        # result = dict((k + "_{}".format(global_step), v) for k, v in result.items())
-        result = dict((k, v) for k, v in result.items())
+        result = dict((k + "_{}".format(global_step), v) for k, v in result.items())
         results.update(result)
         np.save(os.path.join(args.output_dir, "test_preds.npy" if args.output_dir is not None else "test_preds.npy"), preds)
     return results

@@ -26,6 +26,7 @@ from typing import List
 import tqdm
 
 from transformers import PreTrainedTokenizer
+import pdb
 
 
 logger = logging.getLogger(__name__)
@@ -133,9 +134,36 @@ class RetrieverProcessor1(DataProcessor):
                     )
                 )  
         return examples
+    
+    def _create_contexts(self, context):
+        """convert context json to <title, context> pairs"""
+        contexts = []
+        for item in context:
+            title, sentences = item[0], item[1]
+            para = ""
+            for sent in sentences:
+                para += sent
+            contexts.append(title + para)
+        # add NULL for those less than 10 documents
+        for _ in range(len(contexts), 10):
+            contexts.append("NULL")
+        return contexts
+
+    def _sup2label(self, sup_facts, context):
+        """convert supporting facts to 2 ids for hotpotqa"""
+        titles = []
+        for item in context:
+            titles.append(item[0])
+        labels = set()
+        for sup in sup_facts:
+            title = sup[0]
+            index = titles.index(title)
+            labels.add(index)
+        return list(labels)
+
 
 class RetrieverProcessor2(DataProcessor):
-    """Retriever Processor 2 for the 2WikiMultiHop data set."""
+    """Retriever Processor 2 for the 2WikiMultiHopQA data set."""
 
     def get_train_examples(self, data_dir):
         """See base class."""
@@ -172,6 +200,7 @@ class RetrieverProcessor2(DataProcessor):
             contexts = self._create_contexts(context)
             # supporting_facts -> [a, b] index for sup
             labels = self._sup2label(sup_facts, context)
+            labels = self._4labels(labels)
             # answers = d['answer']
             # label = 0 if type == "test" else d['label'] # for test set, there is no label. Just use 0 for convenience.
             id_string = d['_id']
@@ -185,7 +214,7 @@ class RetrieverProcessor2(DataProcessor):
                     )
                 )  
         return examples
-
+    
     def _create_contexts(self, context):
         """convert context json to <title, context> pairs"""
         contexts = []
@@ -211,11 +240,12 @@ class RetrieverProcessor2(DataProcessor):
             index = titles.index(title)
             labels.add(index)
         return list(labels)
-
-
-class RetrieverProcessor2(DataProcessor):
-    """Retriever Processor 2 for the HotpotQA data set."""
-    pass
+    
+    def _4labels(self, labels):
+        """ceonvert 2 labels to 4 labels"""
+        if len(labels) == 2:
+            labels.extend(labels)
+        return labels
 
 
 class ReaderProcessor(DataProcessor):

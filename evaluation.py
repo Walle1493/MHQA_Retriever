@@ -126,7 +126,7 @@ def eval(prediction_file, gold_file):
 
     print(metrics)
 
-def retriever_metrics(prediction, gold):
+def retriever_metrics(prediction, gold, _2wiki=False):
     # cur_sp_pred = set(map(tuple, prediction))
     # gold_sp_pred = set(map(tuple, gold))
     tp, fp, fn = 0, 0, 0
@@ -142,6 +142,13 @@ def retriever_metrics(prediction, gold):
     recall = 1.0 * tp / (tp + fn) if tp + fn > 0 else 0.0
     f1 = 2 * prec * recall / (prec + recall) if prec + recall > 0 else 0.0
     em = 1.0 if fp + fn == 0 else 0.0
+    if _2wiki:
+        cover = 0.0
+        for e in gold:
+            if e in prediction:
+                cover += 1
+        cover = cover / len(gold)
+        return em, f1, prec, recall, cover
     # metrics['sp_em'] += em
     # metrics['sp_f1'] += f1
     # metrics['sp_prec'] += prec
