@@ -805,7 +805,8 @@ def main():
         model.to(args.device)
         # result, preds = evaluate(args, model, tokenizer, prefix=prefix, test=True)
         result, preds = evaluate(args, model, tokenizer, test=True)
-        result = dict((k + "_{}".format(global_step), v) for k, v in result.items())
+        # result = dict((k + "_{}".format(global_step), v) for k, v in result.items())
+        result = dict((k, v) for k, v in result.items())
         results.update(result)
         np.save(os.path.join(args.output_dir, "test_preds.npy" if args.output_dir is not None else "test_preds.npy"), preds)
     return results

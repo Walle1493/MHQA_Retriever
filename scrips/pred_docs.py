@@ -4,7 +4,7 @@ import numpy as np
 import pdb
 
 
-def main(numpy_path, pred_path, result_path):
+def main(numpy_path, pred_path, result_path, top_k, hotpot):
     # pred logits
     logits = np.load(numpy_path)
     # pred json
@@ -15,14 +15,23 @@ def main(numpy_path, pred_path, result_path):
     for i in range(len(logits)):
         # pred index
         logit = logits[i]
-        top2_indices = np.argpartition(logit, -2)[-2:]
+        top_k_indices = np.argpartition(logit, -top_k)[-top_k:]
         # original data
         item = pred[i]
-        context = item["context"]
+        if hotpot:
+            context = item["context"]
+        else:
+            context = item["paragraphs"]
         # pred documents
         pred_docs = []
-        for index in top2_indices:
-            title = context[index][0]
+        for index in top_k_indices:
+            try:
+                if hotpot:
+                    title = context[index][0]
+                else:
+                    title = context[index]["title"]
+            except IndexError:
+                continue
             pred_docs.append(title)
         item["pred_documents"] = pred_docs
     # save results
@@ -31,7 +40,9 @@ def main(numpy_path, pred_path, result_path):
 
 
 if __name__ == "__main__":
-    numpy_path = "/home/mxdong/Codes/MHQA_Retriever/Checkpoints/Retriever1/Test_Preds/test_preds.npy"
-    pred_path = "/home/mxdong/Data/HotpotQA/format_data/dev_dist.json"
-    result_path = "/home/mxdong/Codes/MHQA_Retriever/Checkpoints/Retriever1/Test_Preds/pred_docs.json"
-    main(numpy_path, pred_path, result_path)
+    top_k = 4
+    hotpot = False   # HotpotQA/2Wiki: True; MuSiQue: False
+    numpy_path = "/home/mxdong/Codes/MHQA_Retriever/Checkpoints/Retriever3/Test_Preds/test_preds.npy"
+    pred_path = "/home/mxdong/Data/MuSiQue/format_data/dev.json"
+    result_path = "/home/mxdong/Codes/MHQA_Retriever/Checkpoints/Retriever3/Test_Preds/pred_docs.json"
+    main(numpy_path, pred_path, result_path, top_k, hotpot)

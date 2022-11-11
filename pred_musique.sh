@@ -1,13 +1,11 @@
 export DATA_DIR=/home/mxdong/Data/MuSiQue/format_data
 export TASK_NAME=Retriever3
-export MODEL_NAME=bert-base-uncased
+export MODEL_NAME=/home/mxdong/Codes/Checkpoints/Retriever_MuSiQue/checkpoint-18400
 
-CUDA_VISIBLE_DEVICES=3 python run_musique.py \
+CUDA_VISIBLE_DEVICES=0 python run_musique.py \
     --model_type bert \
     --model_name_or_path $MODEL_NAME \
     --task_name $TASK_NAME \
-    --do_train \
-    --evaluate_during_training \
     --do_test \
     --do_lower_case \
     --data_dir $DATA_DIR \
@@ -17,7 +15,7 @@ CUDA_VISIBLE_DEVICES=3 python run_musique.py \
     --gradient_accumulation_steps 1 \
     --learning_rate 1e-5 \
     --num_train_epochs 4.0 \
-    --output_dir Checkpoints/$TASK_NAME/${MODEL_NAME} \
+    --output_dir Checkpoints/$TASK_NAME/Test_Preds \
     --logging_steps 400 \
     --save_steps 400 \
     --adam_epsilon 1e-6 \
